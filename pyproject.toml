@@ -1,0 +1,13 @@
+[project]
+name = "immich-random-test"
+version = "0.1.0"
+description = "Testing Immich's `search/random` api endpoint"
+readme = "README.md"
+requires-python = ">=3.12.1"
+dependencies = [
+    "matplotlib>=3.10.8",
+    "pandas>=2.3.3",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "scipy>=1.17.0",
+]
