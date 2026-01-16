@@ -15,6 +15,7 @@ IMMICH_URL = os.getenv("IMMICH_URL")
 IMMICH_API_KEY = os.getenv("IMMICH_API_KEY")
 NUM_CALLS = 100  # Number of times to call the API
 ASSETS_PER_CALL = 250
+INCLUDE_STACKED = True
 
 
 def fetch_timeline_buckets(headers):
@@ -26,7 +27,9 @@ def fetch_timeline_buckets(headers):
     try:
         print("Fetching actual asset distribution from timeline buckets...")
         response = requests.get(
-            urllib.parse.urljoin(IMMICH_URL, "api/timeline/buckets"), headers=headers
+            urllib.parse.urljoin(IMMICH_URL, "api/timeline/buckets"),
+            headers=headers,
+            params={"withStacked": "true" if INCLUDE_STACKED else "false"},
         )
         response.raise_for_status()
         buckets = response.json()
@@ -60,7 +63,7 @@ def fetch_random_assets(headers):
         response = requests.post(
             urllib.parse.urljoin(IMMICH_URL, "api/search/random"),
             headers=headers,
-            json={"limit": ASSETS_PER_CALL},
+            json={"limit": ASSETS_PER_CALL, "withStacked": INCLUDE_STACKED},
         )
         response.raise_for_status()
         return response.json()
