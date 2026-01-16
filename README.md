@@ -1,5 +1,7 @@
 # Test for Immich's `search/random` api endpoint
 
+A test script to see if Immich's `search/random` api endpoint holds any bias towards newer assets. The script only tests whole library assets, not filtered assets e.g. albums, people, tags etc.
+
 ## Requirements
 - Python (tested with 3.12.1)
 - [uv](https://docs.astral.sh/uv/)
