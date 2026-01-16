@@ -1,4 +1,8 @@
+# Test for Immich's `search/random` api endpoint
 
+## Requirements
+- Python (tested with 3.12.1)
+- [uv](https://docs.astral.sh/uv/)
 
 ## Installation
 
