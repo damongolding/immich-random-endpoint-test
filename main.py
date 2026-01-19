@@ -1,3 +1,4 @@
+import argparse
 import os
 import urllib.parse
 from datetime import datetime
@@ -18,18 +19,55 @@ ASSETS_PER_CALL = 250
 INCLUDE_STACKED = True
 
 
-def fetch_timeline_buckets(headers):
+def fetch_tag_id(headers, tag_name) -> str | None:
+    """Fetch the tag ID from Immich"""
+    if not IMMICH_URL:
+        print("IMMICH_URL environment variable is not set.")
+        return None
+
+    try:
+        print("Fetching tags")
+        response = requests.get(
+            urllib.parse.urljoin(IMMICH_URL, "api/tags"),
+            headers=headers,
+        )
+        response.raise_for_status()
+        tags = response.json()
+
+        for tag in tags:
+            if tag["value"] == tag_name:
+                print(f"Found tag '{tag_name}' with ID {tag['id']}")
+                return tag["id"]
+
+        print(f"Tag '{tag_name}' not found")
+        return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching tags: {e}")
+        return None
+
+
+def fetch_timeline_buckets(headers, **kwargs):
     """Fetch the timeline buckets to understand actual asset distribution"""
     if not IMMICH_URL:
         print("IMMICH_URL environment variable is not set.")
         return None, 0
+
+    params = {
+        "withStacked": "true" if INCLUDE_STACKED else "false",
+    }
+
+    tag_id = kwargs.get("tag_id", None)
+
+    if tag_id:
+        params["tagId"] = tag_id
 
     try:
         print("Fetching actual asset distribution from timeline buckets...")
         response = requests.get(
             urllib.parse.urljoin(IMMICH_URL, "api/timeline/buckets"),
             headers=headers,
-            params={"withStacked": "true" if INCLUDE_STACKED else "false"},
+            params=params,
         )
         response.raise_for_status()
         buckets = response.json()
@@ -53,17 +91,23 @@ def fetch_timeline_buckets(headers):
         return None, 0
 
 
-def fetch_random_assets(headers):
+def fetch_random_assets(headers, **kwargs):
     """Fetch random assets from the API"""
     if not IMMICH_URL:
         print("IMMICH_URL environment variable is not set.")
         return None, 0
 
+    body = {"limit": ASSETS_PER_CALL, "withStacked": INCLUDE_STACKED}
+
+    tag_id = kwargs.get("tag_id", None)
+    if tag_id:
+        body["tagIds"] = [tag_id]
+
     try:
         response = requests.post(
             urllib.parse.urljoin(IMMICH_URL, "api/search/random"),
             headers=headers,
-            json={"limit": ASSETS_PER_CALL, "withStacked": INCLUDE_STACKED},
+            json=body,
         )
         response.raise_for_status()
         return response.json()
@@ -72,14 +116,14 @@ def fetch_random_assets(headers):
         return []
 
 
-def collect_random_samples(num_calls, headers):
+def collect_random_samples(num_calls, headers, **kwargs):
     """Collect random samples from multiple API calls"""
     all_samples = []
     sample_ids_with_duplicates = []  # Track all including duplicates
 
     for i in range(num_calls):
         print(f"Fetching random batch {i + 1}/{num_calls}...")
-        assets = fetch_random_assets(headers)
+        assets = fetch_random_assets(headers, **kwargs)
 
         for asset in assets:
             all_samples.append(asset)
@@ -118,7 +162,7 @@ def extract_dates_from_assets(assets):
 
 
 def analyze_recency_bias_with_baseline(
-    sample_assets, actual_distribution, total_library_assets
+    sample_assets, actual_distribution, total_library_assets, with_tag=False
 ):
     """Compare random samples against actual library distribution"""
 
@@ -278,13 +322,14 @@ def analyze_recency_bias_with_baseline(
             under_count += 1
 
     # Create visualizations
-    create_comparison_visualizations(comparison_df, sample_df)
+    create_comparison_visualizations(comparison_df, sample_df, with_tag)
 
     return comparison_df
 
 
-def create_comparison_visualizations(comparison_df, sample_df):
+def create_comparison_visualizations(comparison_df, sample_df, with_tag=False):
     """Create visualizations comparing sample vs actual distribution"""
+
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
     years = comparison_df["year"].values
@@ -309,7 +354,9 @@ def create_comparison_visualizations(comparison_df, sample_df):
     )
     axes[0, 0].set_xlabel("Year")
     axes[0, 0].set_ylabel("Percentage")
-    axes[0, 0].set_title("Library vs Sample Distribution by Year")
+    axes[0, 0].set_title(
+        f"Library vs Sample Distribution by Year{' (tag)' if with_tag else ''}"
+    )
     axes[0, 0].set_xticks(x)
     axes[0, 0].set_xticklabels([str(int(y)) for y in years], rotation=45, ha="right")
     axes[0, 0].legend()
@@ -321,7 +368,9 @@ def create_comparison_visualizations(comparison_df, sample_df):
     axes[0, 1].axhline(y=0, color="black", linestyle="-", linewidth=0.5)
     axes[0, 1].set_xlabel("Year")
     axes[0, 1].set_ylabel("Difference (Sample % - Library %)")
-    axes[0, 1].set_title("Over/Under Representation by Year")
+    axes[0, 1].set_title(
+        f"Over/Under Representation by Year{' (tag)' if with_tag else ''}"
+    )
     axes[0, 1].set_xticks(x)
     axes[0, 1].set_xticklabels([str(int(y)) for y in years], rotation=45, ha="right")
     axes[0, 1].grid(axis="y", alpha=0.3)
@@ -339,7 +388,9 @@ def create_comparison_visualizations(comparison_df, sample_df):
 
     axes[1, 0].set_xlabel("Expected Count (based on library)")
     axes[1, 0].set_ylabel("Actual Sample Count")
-    axes[1, 0].set_title("Expected vs Actual Sample Counts")
+    axes[1, 0].set_title(
+        f"Expected vs Actual Sample Counts{' (tag)' if with_tag else ''}"
+    )
     axes[1, 0].legend()
     axes[1, 0].grid(alpha=0.3)
 
@@ -347,7 +398,7 @@ def create_comparison_visualizations(comparison_df, sample_df):
     axes[1, 1].hist(sample_df["date"], bins=50, alpha=0.7, edgecolor="black")
     axes[1, 1].set_xlabel("Date")
     axes[1, 1].set_ylabel("Number of Assets")
-    axes[1, 1].set_title("Sample Timeline Distribution")
+    axes[1, 1].set_title(f"Sample Timeline Distribution{' (tag)' if with_tag else ''}")
     axes[1, 1].tick_params(axis="x", rotation=45)
 
     plt.tight_layout()
@@ -357,13 +408,36 @@ def create_comparison_visualizations(comparison_df, sample_df):
 
 
 def main():
-    print("Starting Immich Random Assets Recency Bias Test")
+    parser = argparse.ArgumentParser(
+        description="A test for Immich's `search/random` api endpoint"
+    )
+
+    parser.add_argument(
+        "-t",
+        "--tag",
+        help="Tag name (human-readable value) from Immich",
+    )
+
+    args = parser.parse_args()
+
+    print(
+        f"Starting Immich Random Assets Recency Bias Test{' with tag' if args.tag else ''}"
+    )
     print("=" * 80)
 
     headers = {"x-api-key": IMMICH_API_KEY, "Accept": "application/json"}
 
     # Step 1: Get actual distribution from library
-    actual_distribution, total_assets = fetch_timeline_buckets(headers)
+    if args.tag:
+        tag_id = fetch_tag_id(headers, args.tag)
+        if not tag_id:
+            print("Failed to fetch tag ID. Exiting.")
+            return
+        actual_distribution, total_assets = fetch_timeline_buckets(
+            headers, tag_id=tag_id
+        )
+    else:
+        actual_distribution, total_assets = fetch_timeline_buckets(headers)
 
     if not actual_distribution:
         print("Failed to fetch actual distribution. Exiting.")
@@ -371,14 +445,20 @@ def main():
 
     # Step 2: Collect random samples
     print(f"\nCollecting {NUM_CALLS} random samples...")
-    sample_assets = collect_random_samples(NUM_CALLS, headers)
+    if args.tag:
+        sample_assets = collect_random_samples(NUM_CALLS, headers, tag_id=tag_id)
+    else:
+        sample_assets = collect_random_samples(NUM_CALLS, headers)
 
     if not sample_assets:
         print("No samples collected. Please check your API endpoint and credentials.")
         return
 
     # Step 3: Analyze for recency bias
-    analyze_recency_bias_with_baseline(sample_assets, actual_distribution, total_assets)
+    with_tag = bool(args.tag)
+    analyze_recency_bias_with_baseline(
+        sample_assets, actual_distribution, total_assets, with_tag
+    )
 
     print("\n" + "=" * 80)
     print("Analysis complete!")

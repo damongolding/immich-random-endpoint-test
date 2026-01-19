@@ -1,4 +1,4 @@
-# Test for Immich's `search/random` api endpoint
+# A test for Immich's `search/random` api endpoint
 
 A test script to see if Immich's `search/random` api endpoint holds any bias towards newer assets. The script only tests whole library assets, not filtered assets e.g. albums, people, tags etc.
 
@@ -40,4 +40,13 @@ A test script to see if Immich's `search/random` api endpoint holds any bias tow
 6. Run the script:
    ```bash
    python main.py
+   ```
+
+## Tag Bias Test
+
+Run the script with the `--tag` option to test for tag bias:
+
+1. Run the script:
+   ```bash
+   python main.py --tag "tag_name"
    ```
