@@ -44,6 +44,9 @@ A test script to see if Immich's `search/random` api endpoint holds any bias tow
 
 ## Tag Bias Test
 
+> [!IMPORTANT]
+> Only one tag can be tested at a time.
+
 Run the script with the `--tag` option to test for tag bias:
 
 1. Run the script:
